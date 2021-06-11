@@ -4,7 +4,11 @@ import * as dat from 'dat.gui';
 import SceneManager from './sceneManager/scene';
 import gsap from 'gsap';
 
+import vertexShader from './shaders/vertex.glsl?raw';
+import fragmentShader from './shaders/fragment.glsl?raw';
+
 const gui = new dat.GUI();
+const debugObject = {};
 
 //scene
 const canvas = document.querySelector('#canvas');
@@ -21,9 +25,7 @@ fogFolder.add(scene.scene.fog, 'far').min(1).max(100).step(0.01).listen();
 fogFolder.addColor(conf, 'color').onChange((color)=>{
 	scene.scene.fog.color.set(color);
 	scene.scene.background.set(color);
-	scene.scene.children
-		.filter(obj => obj.name === 'floor')[0]
-		.material.color.set(color)
+	conf.color = color;
 });
 const axesHelper = new THREE.AxesHelper(5);
 
@@ -31,51 +33,78 @@ const axesHelper = new THREE.AxesHelper(5);
 const directionalLight = new THREE.DirectionalLight(0xFFFFFF,1);
 directionalLight.position.set(10,10,10);
 scene.add(directionalLight);
-const directionalHelper = new THREE.DirectionalLightHelper( directionalLight, 5 );
-scene.add(directionalHelper);
-
-gui.add(directionalHelper, 'visible').name('DLight Helper')
-
 const ambiantLight = new THREE.AmbientLight(0xFFFFFF,1);
 scene.add(ambiantLight);
 
-//geometry
+//plane 
 const width = 240;  
-const height = 240;   
-const geometry = new THREE.PlaneGeometry(width,height,100,100);
-const material = new THREE.MeshPhongMaterial( { color: conf.color} );
+const height = 240; 
+const geometry = new THREE.PlaneGeometry(5,5,100,100);
+
+//color 
+debugObject.depthColor = "#9d0202";
+debugObject.surfaceColor = "#bb8427";
+
+const material = new THREE.ShaderMaterial({
+	vertexShader,
+	fragmentShader,
+	side:THREE.DoubleSide,
+	uniforms:{
+		uTime:{ value: 0 },
+
+		uElevation:{ value: 0.2 },
+		uFrequency:{ value: new THREE.Vector2(4, 1.5)},
+		uWaveSpeed:{value: 0.5 },
+
+		uSmallWavesElevation: {value: 0.622 },
+		uSmallWavesFrequency: {value: 1.589 },
+		uSmallWavesSpeed: {value: 0.371 },
+		uSmallWavesIterations: {value: 4 },
+
+		//color 
+		uDepthColor:{ value: new THREE.Color(debugObject.depthColor)},
+		uSurfaceColor:{ value: new THREE.Color(debugObject.surfaceColor)},
+		uColorOffset:{ value: 0.501 },
+		uColorMultiplier:{ value: 1.692}
+
+	},
+});
 const plane = new THREE.Mesh(geometry,material);
-plane.name = 'floor';
 plane.rotation.x = Math.PI * 1.50;
 scene.add(plane);
-
-
 gui.add(material, 'wireframe').name('Plane WireFrame');
 
+const wavesGui = gui.addFolder('Waves');
+wavesGui.add(material.uniforms.uElevation, 'value').min(0).max(1).step(0.001).name('Elevation');
+wavesGui.add(material.uniforms.uFrequency.value, 'x').min(0).max(10).step(0.001).name('FrequencyX');
+wavesGui.add(material.uniforms.uFrequency.value, 'y').min(0).max(10).step(0.001).name('FrequencyY');
+wavesGui.add(material.uniforms.uWaveSpeed, 'value').min(0).max(10).step(0.001).name('WaveSpeed');
 
-const boxGeometry = new THREE.BoxBufferGeometry(4,4,4);
-const boxMaterial = new THREE.MeshStandardMaterial({color:0x442255});
-const cube = new THREE.Mesh(boxGeometry, boxMaterial);
-cube.position.y = 5;
-cube.add(axesHelper);
-scene.add(cube);
+wavesGui.addColor(debugObject, 'depthColor').name('DepthColor').onChange(() => {
+		material.uniforms.uDepthColor.value.set(debugObject.depthColor);
+});
+wavesGui.addColor(debugObject, 'surfaceColor').name('SurfaceColor').onChange(() => {
+	material.uniforms.uSurfaceColor.value.set(debugObject.surfaceColor);
+});
+wavesGui.add(material.uniforms.uColorOffset, 'value').min(0).max(1).step(0.001).name('Color Offset');
+wavesGui.add(material.uniforms.uColorMultiplier, 'value').min(0).max(10).step(0.001).name('Color Multiplier');
 
-const cubeGUI = gui.addFolder('Cube');
-cubeGUI.add(boxMaterial, 'wireframe').name('Box Wireframe');
-cubeGUI.add(cube.scale, 'x').min(1).max(5).step(0.01).name('BoxScale X');
-cubeGUI.add(cube.scale, 'y').min(1).max(5).step(0.01).name('BoxScale Y');
-cubeGUI.add(cube.scale, 'z').min(1).max(5).step(0.01).name('BoxScale Z');
+const sWavesGui = gui.addFolder('Small Waves');
+sWavesGui.add(material.uniforms.uSmallWavesElevation, 'value').min(0).max(1).step(0.001).name('Elevation');
+sWavesGui.add(material.uniforms.uSmallWavesFrequency, 'value').min(0).max(10).step(0.001).name('Frequency');
+sWavesGui.add(material.uniforms.uSmallWavesSpeed, 'value').min(0).max(4).step(0.001).name('Speed');
+sWavesGui.add(material.uniforms.uSmallWavesIterations, 'value').min(1).max(4).step(1).name('Iteration');
 
-gsap.to(cube.rotation,{ duration:3,delay:3,x: Math.PI * 2 });
+
 
 const clock = new THREE.Clock();
 
 const animate = () => {
 	const elapsedTime = clock.getElapsedTime();
 
-	cube.rotation.y = elapsedTime;
+	//update
+	material.uniforms.uTime.value = elapsedTime;
 
-	
 	scene.onUpdate();
 	scene.onUpdateStats();
 	requestAnimationFrame( animate );
